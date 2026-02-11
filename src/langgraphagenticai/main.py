@@ -36,7 +36,7 @@ def load_langgraph_agenticai_app():
             return
         
         usecase=user_input.get("selected_usecase")
-
+        frequency = user_input.get("news_option")
         if not usecase:
                 st.error("Error: No use case selected.")
                 return
@@ -46,10 +46,11 @@ def load_langgraph_agenticai_app():
             if not os.environ.get("TAVILY_API_KEY"):
                 st.error("⚠️ Tavily API key is required for 'Chatbot with Tool'. Please enter it in the sidebar.")
                 return
+        
              
         graph_builder= GraphBuilder(model)
         try:
-             graph=graph_builder.setup_graph(usecase)
+             graph=graph_builder.setup_graph(usecase,frequency)
              print(user_message)
              DisplayResultStreamlit(usecase,graph,user_message).display_result_on_ui()
         except Exception as e:

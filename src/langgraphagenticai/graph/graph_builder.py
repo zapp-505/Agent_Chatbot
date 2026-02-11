@@ -5,6 +5,7 @@ from src.langgraphagenticai.nodes.basic_chatbot_node import BasicChatbotNode
 from langgraph.prebuilt import tools_condition, ToolNode
 from src.langgraphagenticai.tools.search_tool import search_tool,create_tool_node
 from src.langgraphagenticai.nodes.chatbot_with_tool_node import ChatbotWithToolNode
+from src.langgraphagenticai.nodes.news_summarizer_node import NewsSummarizerNode
 
 class GraphBuilder:
     def __init__(self,model):
@@ -45,13 +46,17 @@ class GraphBuilder:
         self.graph_builder.add_edge("tools","chatbot")
         self.graph_builder.add_edge("chatbot",END)
 
-    def news_summarizer_build_graph(self):
+    def news_summarizer_build_graph(self,frequency):
         tool = search_tool()
-        tool_node = create_tool_node(tool)
+        self.news_node = NewsSummarizerNode(self.llm)  
+        fetch_node = self.news_node.fetch_news(tool,frequency) 
+        self.graph_builder.add_node("news",fetch_node)
+        self.graph_builder.add_node("summarizer",self.news_node.summarizer)
+        self.graph_builder.add_edge(START,"news")
+        self.graph_builder.add_edge("news","summarizer")
+        self.graph_builder.add_edge("summarizer", END)
 
-        
-
-    def setup_graph(self,usecase:str):
+    def setup_graph(self,usecase:str,frequency):
         """
         Sets up the graph for the selected use case.
         """
@@ -62,8 +67,8 @@ class GraphBuilder:
             self.agent_with_tools_build_graph()
         
         elif usecase == "AI news":
-            # TODO: Implement AI news use case
-            self.basic_chatbot_build_graph()  # Fallback to basic chatbot for now
+           
+            self.news_summarizer_build_graph(frequency) 
         
         else:
             raise ValueError(f"Unknown use case: {usecase}")
