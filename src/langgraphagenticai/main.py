@@ -25,6 +25,31 @@ def load_langgraph_agenticai_app():
     if tavily_key:
         os.environ["TAVILY_API_KEY"] = tavily_key
     
+    # Handle AI News button trigger
+    if user_input.get("selected_usecase") == "AI news" and st.session_state.get("fetch_news_triggered", False):
+        obj_llm_config = GroqLLM(user_controls_input=user_input)
+        model = obj_llm_config.get_llm_model()
+        
+        if not model:
+            st.error("LLM could not be initialized")
+            return
+        
+        if not os.environ.get("TAVILY_API_KEY"):
+            st.error("⚠️ Tavily API key is required for 'AI news'. Please enter it in the sidebar.")
+            return
+        
+        frequency = st.session_state.get("news_option")
+        graph_builder = GraphBuilder(model)
+        try:
+            graph = graph_builder.setup_graph("AI news", frequency)
+            # Use a dummy message for news fetching
+            DisplayResultStreamlit("AI news", graph, "Fetching latest AI news...").display_result_on_ui()
+            # Reset the trigger
+            st.session_state["fetch_news_triggered"] = False
+        except Exception as e:
+            st.error(f"Error: Graph set up failed- {e}")
+            return
+    
     user_message = st.chat_input("Enter your message:")
 
     if user_message:

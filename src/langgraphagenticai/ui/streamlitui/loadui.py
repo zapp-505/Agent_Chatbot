@@ -41,10 +41,13 @@ class LoadStreamlitUI:
                      st.warning("⚠️ Please enter your Tavily API key to proceed.")
 
                 if self.user_controls["selected_usecase"]=="AI news":
+                    st.subheader("AI News Explorer")
                     news_options = self.config.get_news_options()
                     self.user_controls["news_option"]=st.selectbox("Select Time Frame",news_options)
+                    st.session_state["news_option"] = self.user_controls["news_option"]
 
                 if st.button("Fetch News", key="fetch_news_button"):
+                    st.session_state["fetch_news_triggered"] = True
                     self.user_controls["fetch_news_triggered"] = True
         return self.user_controls
     

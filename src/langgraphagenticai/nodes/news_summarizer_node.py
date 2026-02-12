@@ -1,42 +1,122 @@
 from src.langgraphagenticai.state.state import State
-from langchain_core.messages import ToolMessage
+from tavily import TavilyClient
+from langchain_core.prompts import ChatPromptTemplate
+import os
+
 class NewsSummarizerNode:
-    def __init__(self,model):
-        self.llm=model
-    
-    def fetch_news(self,tool,frequency,tate):
+    def __init__(self, model):
         """
-        Creates a node function that fetches AI news using the Tavily search tool.
-        Returns a callable node function that LangGraph can execute
+        Initialize the NewsSummarizerNode with LLM and Tavily client.
+        """
+        self.llm = model
+        self.tavily = TavilyClient()
+        # Internal state to track workflow steps
+        self.internal_state = {}
+    
+    def fetch_news(self, frequency: str):
+        """
+        Creates a node function that fetches AI news using Tavily API.
+        
+        Args:
+            frequency (str): The time frame for news (daily, weekly, monthly, year)
+        
+        Returns:
+            Callable node function that LangGraph can execute
         """
         def _fetch_node(state: State):
-            query = f"fetch the most important and relevant ai news within {frequency} range till today"
-            news = tool[0].invoke(query)  # tool is a list, so use tool[0]
+            self.internal_state['frequency'] = frequency
+            
+            # Map frequency to Tavily API parameters
+            time_range_map = {'daily': 'd', 'weekly': 'w', 'monthly': 'm', 'year': 'y'}
+            days_map = {'daily': 1, 'weekly': 7, 'monthly': 30, 'year': 366}
+            
+            # Fetch news using Tavily client
+            response = self.tavily.search(
+                query="Top Artificial Intelligence (AI) technology news India and globally",
+                topic="news",
+                time_range=time_range_map.get(frequency, 'd'),
+                include_answer="advanced",
+                max_results=20,
+                days=days_map.get(frequency, 1)
+            )
+            
+            # Store news data in state
+            news_data = response.get('results', [])
+            self.internal_state['news_data'] = news_data
+            
+            # Return state with news data for next node
             return {
-                "messages": [
-                    ToolMessage(
-                        content=str(news),
-                        name="news_search",
-                        tool_call_id="news_fetch_001"  # Add this required field
-                    )
-                ]
+                "messages": state.get("messages", []),
+                "news_data": news_data
             }
+        
         return _fetch_node
     
-    def summarizer(self,state):
+    def summarizer(self, state: State):
         """
-        Summarizes news content from the state messages.
+        Summarizes the fetched news using LLM with structured prompt.
+        
+        Args:
+            state (State): The state dictionary containing 'news_data'
+        
         Returns:
             Dictionary with summarized news message
         """
-        news_content = "" 
-        for message in state["messages"]:
-            if isinstance(message, ToolMessage):
-                news_content += message.content + "\n"
+        news_items = self.internal_state.get('news_data', [])
         
-        prompt = f"""Summarize and organize the following news content in proper markdown format 
-        with dates mentioned in order and valuable insights:
+        if not news_items:
+            return {"messages": [self.llm.invoke("No news data available to summarize.")]}
         
-        {news_content}
+        # Create structured prompt template
+        prompt_template = ChatPromptTemplate.from_messages([
+            ("system", """Summarize AI news articles into markdown format. For each item include:
+            - Date in **YYYY-MM-DD** format in IST timezone
+            - Concise summary from latest news (2-3 sentences)
+            - Sort news by date (latest first)
+            - Source URL as clickable link
+            
+            Use format:
+            ### [Date]
+            - **[Title/Topic]**: [Summary] [Read more](URL)
+            
+            Provide insights and trends at the end."""),
+            ("user", "Articles:\n{articles}")
+        ])
+        
+        # Format articles for the prompt
+        articles_str = "\n\n".join([
+            f"Content: {item.get('content', '')}\nURL: {item.get('url', '')}\nDate: {item.get('published_date', '')}\nTitle: {item.get('title', '')}"
+            for item in news_items
+        ])
+        
+        # Generate summary
+        response = self.llm.invoke(prompt_template.format(articles=articles_str))
+        summary = response.content
+        self.internal_state['summary'] = summary
+        
+        # Optionally save to file
+        self._save_result()
+        
+        return {"messages": [response]}
+    
+    def _save_result(self):
         """
-        return {"messages":[self.llm.invoke(prompt)]}
+        Save the news summary to a markdown file.
+        Internal method called after summarization.
+        """
+        try:
+            frequency = self.internal_state.get('frequency', 'unknown')
+            summary = self.internal_state.get('summary', '')
+            
+            # Create directory if it doesn't exist
+            os.makedirs("./AINews", exist_ok=True)
+            
+            filename = f"./AINews/{frequency}_summary.md"
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f"# {frequency.capitalize()} AI News Summary\n\n")
+                f.write(summary)
+            
+            self.internal_state['filename'] = filename
+            print(f"✓ News summary saved to {filename}")
+        except Exception as e:
+            print(f"Warning: Could not save file - {e}")
