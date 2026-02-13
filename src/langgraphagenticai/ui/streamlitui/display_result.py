@@ -33,10 +33,12 @@ class DisplayResultStreamlit:
             for event in graph.stream({'messages':("user",user_message)}):
                 for value in event.values():
                     if 'messages' in value:
-                        assistant_message = value["messages"].content
-                        with st.chat_message("assistant"):
-                            st.write(assistant_message)
-                        st.session_state.chat_history.append({"role": "assistant", "content": assistant_message})
+                        for msg in value["messages"]:
+                            if hasattr(msg, 'content') and msg.content:
+                                assistant_message = msg.content
+                                with st.chat_message("assistant"):
+                                    st.markdown(assistant_message)
+                                st.session_state.chat_history.append({"role": "assistant", "content": assistant_message})
 
         elif usecase == "Chatbot with Tool":
             # Prepare state and invoke the graph

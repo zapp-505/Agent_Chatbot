@@ -88,10 +88,10 @@ class NewsSummarizerNode:
         self.llm=model
     
     def fetch_news(self,tool,frequency,tate):
-        """
+        
         Creates a node function that fetches AI news using the Tavily search tool.
         Returns a callable node function that LangGraph can execute
-        """
+        
         def _fetch_node(state: State):
             query = f"fetch the most important and relevant ai news within {frequency} range till today"
             news = tool[0].invoke(query)  # tool is a list, so use tool[0]
@@ -107,20 +107,20 @@ class NewsSummarizerNode:
         return _fetch_node
     
     def summarizer(self,state):
-        """
+        
         Summarizes news content from the state messages.
         Returns:
             Dictionary with summarized news message
-        """
+        
         news_content = "" 
         for message in state["messages"]:
             if isinstance(message, ToolMessage):
                 news_content += message.content + "\n"
         
-        prompt = f"""Summarize and organize the following news content in proper markdown format 
+        prompt = fSummarize and organize the following news content in proper markdown format 
         with dates mentioned in order and valuable insights:
         
         {news_content}
-        """
+        
         return {"messages":[self.llm.invoke(prompt)]}
     """

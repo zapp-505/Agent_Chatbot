@@ -9,7 +9,7 @@ class NewsSummarizerNode:
         Initialize the NewsSummarizerNode with LLM and Tavily client.
         """
         self.llm = model
-        self.tavily = TavilyClient()
+        self.tavily = None
         # Internal state to track workflow steps
         self.internal_state = {}
     
@@ -25,6 +25,13 @@ class NewsSummarizerNode:
         """
         def _fetch_node(state: State):
             self.internal_state['frequency'] = frequency
+            
+            # Initialize Tavily client with API key from environment
+            if self.tavily is None:
+                tavily_api_key = os.environ.get("TAVILY_API_KEY")
+                if not tavily_api_key:
+                    raise ValueError("TAVILY_API_KEY environment variable is not set. Please provide a valid Tavily API key.")
+                self.tavily = TavilyClient(api_key=tavily_api_key)
             
             # Map frequency to Tavily API parameters
             time_range_map = {'daily': 'd', 'weekly': 'w', 'monthly': 'm', 'year': 'y'}
@@ -65,7 +72,8 @@ class NewsSummarizerNode:
         news_items = self.internal_state.get('news_data', [])
         
         if not news_items:
-            return {"messages": [self.llm.invoke("No news data available to summarize.")]}
+            response = self.llm.invoke("No news data available to summarize.")
+            return {"messages": state.get("messages", []) + [response]}
         
         # Create structured prompt template
         prompt_template = ChatPromptTemplate.from_messages([
@@ -89,15 +97,16 @@ class NewsSummarizerNode:
             for item in news_items
         ])
         
-        # Generate summary
-        response = self.llm.invoke(prompt_template.format(articles=articles_str))
+        # Generate summary using chain
+        chain = prompt_template | self.llm
+        response = chain.invoke({"articles": articles_str})
         summary = response.content
         self.internal_state['summary'] = summary
         
         # Optionally save to file
         self._save_result()
         
-        return {"messages": [response]}
+        return {"messages": state.get("messages", []) + [response]}
     
     def _save_result(self):
         """

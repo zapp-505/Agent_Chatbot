@@ -19,6 +19,6 @@ class Config:
         return self.config["DEFAULT"].get("PAGE_TITLE")
     
     def get_news_options(self):
-        return self.config["DEFAULT"].get("NEWS_OPTIONS")
+        return self.config["DEFAULT"].get("NEWS_OPTIONS").split(", ")
     
 
